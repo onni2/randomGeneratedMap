@@ -1,0 +1,3 @@
+C:/Users/odinn/Desktop/vetur2025/c++/randomGeneratedMap/CMakeFiles/MyMapProject.dir
+C:/Users/odinn/Desktop/vetur2025/c++/randomGeneratedMap/CMakeFiles/edit_cache.dir
+C:/Users/odinn/Desktop/vetur2025/c++/randomGeneratedMap/CMakeFiles/rebuild_cache.dir
