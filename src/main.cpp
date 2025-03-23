@@ -116,97 +116,109 @@ public:
 };
 
 class MapGenerator {
-private:
-    int width, height;
-    std::vector<std::vector<TerrainTile>> grid;
-    std::vector<std::vector<float>> heightMap;
-    siv::PerlinNoise perlin;
-
-    bool hasWaterAroundEdges() const {
-        for (int j = 0; j < width; ++j) {
-            if (grid[0][j].getSymbol() != 'W' || grid[height - 1][j].getSymbol() != 'W') {
-                return false;
-            }
-        }
-        for (int i = 0; i < height; ++i) {
-            if (grid[i][0].getSymbol() != 'W' || grid[i][width - 1].getSymbol() != 'W') {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    float falloff(float x, float y, float width, float height) {
-        float nx = x / width;
-        float ny = y / height;
-        float dx = nx - 0.5f;
-        float dy = ny - 0.5f;
-        float distance = std::sqrt(dx * dx + dy * dy);
-        float falloffMultiplier = 4.0f;
-        float falloff = std::exp(-distance * falloffMultiplier);
-        return std::max(falloff, 0.0f);
-    }
-
-    void generateHeightMap() {
-        const float baseScale = 0.01f;
-        const float detailScale = 0.1f;
-        const int octaves = 8;
-
-        float minHeight = std::numeric_limits<float>::max();
-        float maxHeight = std::numeric_limits<float>::lowest();
-
-        for (int i = 0; i < height; ++i) {
+    private:
+        int width, height;
+        float falloffStart;
+        float falloffEnd;
+        std::vector<std::vector<TerrainTile>> grid;
+        std::vector<std::vector<float>> heightMap;
+        siv::PerlinNoise perlin;
+    
+        bool hasWaterAroundEdges() const {
             for (int j = 0; j < width; ++j) {
-                float baseNoise = perlin.octave2D(j * baseScale, i * baseScale, octaves);
-                float detailNoise = perlin.octave2D(j * detailScale, i * detailScale, octaves);
-                float heightValue = baseNoise * 0.7f + detailNoise * 0.3f;
-                float falloffValue = falloff(j, i, width, height);
-                heightValue *= falloffValue;
-                minHeight = std::min(minHeight, heightValue);
-                maxHeight = std::max(maxHeight, heightValue);
-                heightMap[i][j] = heightValue;
+                if (grid[0][j].getSymbol() != 'W' || grid[height - 1][j].getSymbol() != 'W') {
+                    return false;
+                }
+            }
+            for (int i = 0; i < height; ++i) {
+                if (grid[i][0].getSymbol() != 'W' || grid[i][width - 1].getSymbol() != 'W') {
+                    return false;
+                }
+            }
+            return true;
+        }
+    
+        float falloff(float x, float y) {
+            // Map coordinates to -1..1 range
+            float nx = (x / (width - 1.0f)) * 2.0f - 1.0f;
+            float ny = (y / (height - 1.0f)) * 2.0f - 1.0f;
+            
+            // Find maximum distance from center (diamond shape)
+            float t = std::max(std::abs(nx), std::abs(ny));
+            
+            // Apply falloff with smooth interpolation
+            if (t < falloffStart) {
+                return 1.0f;
+            } else if (t > falloffEnd) {
+                return 0.0f;
+            } else {
+                float lerpVal = (t - falloffStart) / (falloffEnd - falloffStart);
+                return 1.0f - (lerpVal * lerpVal * (3.0f - 2.0f * lerpVal)); // SmoothStep
             }
         }
-
-        float range = maxHeight - minHeight;
-        if (range > 0) {
+    
+        void generateHeightMap() {
+            const float baseScale = 0.01f;
+            const float detailScale = 0.1f;
+            const int octaves = 8;
+    
+            float minHeight = std::numeric_limits<float>::max();
+            float maxHeight = std::numeric_limits<float>::lowest();
+    
             for (int i = 0; i < height; ++i) {
                 for (int j = 0; j < width; ++j) {
-                    heightMap[i][j] = (heightMap[i][j] - minHeight) / range;
-                    heightMap[i][j] = 1.0f - heightMap[i][j];
+                    float baseNoise = perlin.octave2D(j * baseScale, i * baseScale, octaves);
+                    float detailNoise = perlin.octave2D(j * detailScale, i * detailScale, octaves);
+                    float heightValue = baseNoise * 0.7f + detailNoise * 0.3f;
+                    float falloffValue = falloff(j, i);
+                    heightValue *= falloffValue;
+                    
+                    minHeight = std::min(minHeight, heightValue);
+                    maxHeight = std::max(maxHeight, heightValue);
+                    heightMap[i][j] = heightValue;
+                }
+            }
+    
+            // Normalize heights
+            float range = maxHeight - minHeight;
+            if (range > 0) {
+                for (int i = 0; i < height; ++i) {
+                    for (int j = 0; j < width; ++j) {
+                        heightMap[i][j] = (heightMap[i][j] - minHeight) / range;
+                    }
                 }
             }
         }
-    }
-
-    std::unique_ptr<Terrain> generateTerrainFromHeight(float h) {
-        if (h < 0.3f) return std::make_unique<Water>();
-        if (h < 0.35f) return std::make_unique<Beach>();
-        if (h < 0.7f) return std::make_unique<Grass>(static_cast<int>(h * 10));
-        return std::make_unique<Stone>();
-    }
-
-public:
-    MapGenerator generateMapWithWaterLoop(int width, int height) {
-        MapGenerator map(width, height);
-        while (!map.hasWaterAroundEdges()) {
-            map = MapGenerator(width, height); // Regenerate the map until water is found around the edges
+    
+        std::unique_ptr<Terrain> generateTerrainFromHeight(float h) {
+            if (h < 0.3f) return std::make_unique<Water>();
+            if (h < 0.35f) return std::make_unique<Beach>();
+            if (h < 0.7f) return std::make_unique<Grass>(static_cast<int>(h * 10));
+            return std::make_unique<Stone>();
         }
-        return map; // Return the generated map
-    }
-
-    MapGenerator(int w, int h) : width(w), height(h), perlin(rand()) {
-        grid.resize(height);
-        heightMap.resize(height, std::vector<float>(width, 0.0f));
-        generateHeightMap();
-
-        for (int i = 0; i < height; ++i) {
-            grid[i].reserve(width);
-            for (int j = 0; j < width; ++j) {
-                grid[i].emplace_back(generateTerrainFromHeight(heightMap[i][j]));
+    
+    public:
+        MapGenerator generateMapWithWaterLoop(int width, int height) {
+            MapGenerator map(width, height, falloffStart, falloffEnd);
+            while (!map.hasWaterAroundEdges()) {
+                map = MapGenerator(width, height, falloffStart, falloffEnd);
+            }
+            return map;
+        }
+    
+        MapGenerator(int w, int h, float start = 0.25f, float end = 0.75f) 
+            : width(w), height(h), falloffStart(start), falloffEnd(end), perlin(rand()) {
+            grid.resize(height);
+            heightMap.resize(height, std::vector<float>(width, 0.0f));
+            generateHeightMap();
+    
+            for (int i = 0; i < height; ++i) {
+                grid[i].reserve(width);
+                for (int j = 0; j < width; ++j) {
+                    grid[i].emplace_back(generateTerrainFromHeight(heightMap[i][j]));
+                }
             }
         }
-    }
 
     void render() const {
         float tileWidth = 2.0f / width;
@@ -269,6 +281,26 @@ public:
         file.close();
         std::cout << "Map exported to " << filename << std::endl;
     }
+
+    void invertTextures() {
+        for (int i = 0; i < height; ++i) {
+            for (int j = 0; j < width; ++j) {
+                char current = grid[i][j].getSymbol();
+                std::unique_ptr<Terrain> newTerrain;
+
+                switch (current) {
+                    case 'W': newTerrain = std::make_unique<Stone>(); break;
+                    case 'S': newTerrain = std::make_unique<Water>(); break;
+                    case 'G': newTerrain = std::make_unique<Beach>(); break;
+                    case 'B': newTerrain = std::make_unique<Grass>(5); break; // Default grass value
+                    default: newTerrain = std::make_unique<Water>(); break;
+                }
+                
+                grid[i][j].terrain = std::move(newTerrain);
+            }
+        }
+    }
+
 };
 
 // Global variables for map and editing state
@@ -362,8 +394,15 @@ int main() {
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
 
-    // Generate the map with the water loop
-    map = new MapGenerator(mapWidth, mapHeight);
+    // Generate the map with custom falloff parameters
+    const float falloffStart = 0.4f;  // 30% from center
+    const float falloffEnd = 0.9f;    // 80% from center
+
+    
+    // Create generator with custom falloff settings
+    map = new MapGenerator(mapWidth, mapHeight, falloffStart, falloffEnd);
+    
+    // Generate map with water around edges
     *map = map->generateMapWithWaterLoop(mapWidth, mapHeight);
 
     // Set up input callbacks

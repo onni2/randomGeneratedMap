@@ -57,6 +57,10 @@
         "xutility": "cpp",
         "array": "cpp",
         "numeric": "cpp",
-        "random": "cpp"
+        "random": "cpp",
+        "fstream": "cpp",
+        "functional": "cpp",
+        "unordered_map": "cpp",
+        "xhash": "cpp"
     }
 }
