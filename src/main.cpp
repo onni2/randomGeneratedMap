@@ -118,74 +118,59 @@ public:
 class MapGenerator {
     private:
         int width, height;
-        float falloffStart;
-        float falloffEnd;
+        float islandScale;
         std::vector<std::vector<TerrainTile>> grid;
         std::vector<std::vector<float>> heightMap;
+        std::vector<std::vector<float>> falloffMap;
         siv::PerlinNoise perlin;
     
-        bool hasWaterAroundEdges() const {
-            for (int j = 0; j < width; ++j) {
-                if (grid[0][j].getSymbol() != 'W' || grid[height - 1][j].getSymbol() != 'W') {
-                    return false;
-                }
-            }
-            for (int i = 0; i < height; ++i) {
-                if (grid[i][0].getSymbol() != 'W' || grid[i][width - 1].getSymbol() != 'W') {
-                    return false;
-                }
-            }
-            return true;
-        }
+        void generateFalloffMap() {
+            falloffMap.resize(height, std::vector<float>(width));
+            const float centerX = (width - 1) / 2.0f;
+            const float centerY = (height - 1) / 2.0f;
     
-        float falloff(float x, float y) {
-            // Map coordinates to -1..1 range
-            float nx = (x / (width - 1.0f)) * 2.0f - 1.0f;
-            float ny = (y / (height - 1.0f)) * 2.0f - 1.0f;
-            
-            // Find maximum distance from center (diamond shape)
-            float t = std::max(std::abs(nx), std::abs(ny));
-            
-            // Apply falloff with smooth interpolation
-            if (t < falloffStart) {
-                return 1.0f;
-            } else if (t > falloffEnd) {
-                return 0.0f;
-            } else {
-                float lerpVal = (t - falloffStart) / (falloffEnd - falloffStart);
-                return 1.0f - (lerpVal * lerpVal * (3.0f - 2.0f * lerpVal)); // SmoothStep
+            for (int y = 0; y < height; ++y) {
+                for (int x = 0; x < width; ++x) {
+                    // Use member variable islandScale
+                    float dx = (x - centerX) / (centerX * islandScale);
+                    float dy = (y - centerY) / (centerY * islandScale);
+                    float distance = std::sqrt(dx*dx + dy*dy);
+                    
+                    distance = std::clamp(distance, 0.0f, 1.0f);
+                    distance = distance * distance * (3.0f - 2.0f * distance);
+                    falloffMap[y][x] = 1.0f - distance;
+                }
             }
         }
     
         void generateHeightMap() {
-            const float baseScale = 0.01f;
-            const float detailScale = 0.1f;
-            const int octaves = 8;
+            const float baseScale = 0.03f;  // More zoomed-out noise
+            const int octaves = 9;
+            const float persistence = 0.5f;
+            const float lacunarity = 2.0f;
     
-            float minHeight = std::numeric_limits<float>::max();
-            float maxHeight = std::numeric_limits<float>::lowest();
+            // ... rest of height map generation ...
     
             for (int i = 0; i < height; ++i) {
                 for (int j = 0; j < width; ++j) {
-                    float baseNoise = perlin.octave2D(j * baseScale, i * baseScale, octaves);
-                    float detailNoise = perlin.octave2D(j * detailScale, i * detailScale, octaves);
-                    float heightValue = baseNoise * 0.7f + detailNoise * 0.3f;
-                    float falloffValue = falloff(j, i);
-                    heightValue *= falloffValue;
-                    
-                    minHeight = std::min(minHeight, heightValue);
-                    maxHeight = std::max(maxHeight, heightValue);
-                    heightMap[i][j] = heightValue;
-                }
-            }
+                    float amplitude = 1.0f;
+                    float frequency = 1.0f;
+                    float noiseHeight = 0.0f;
     
-            // Normalize heights
-            float range = maxHeight - minHeight;
-            if (range > 0) {
-                for (int i = 0; i < height; ++i) {
-                    for (int j = 0; j < width; ++j) {
-                        heightMap[i][j] = (heightMap[i][j] - minHeight) / range;
+                    for (int o = 0; o < octaves; ++o) {
+                        float sampleX = j * baseScale * frequency;
+                        float sampleY = i * baseScale * frequency;
+                        float perlinValue = perlin.noise2D(sampleX, sampleY);
+                        
+                        noiseHeight += perlinValue * amplitude;
+                        amplitude *= persistence;
+                        frequency *= lacunarity;
                     }
+    
+                    // Apply falloff and normalize
+                    noiseHeight = (noiseHeight + 1) / 2.0f;  // Remap to [0..1]
+                    noiseHeight *= falloffMap[i][j];          // Apply island shape
+                    heightMap[i][j] = noiseHeight;
                 }
             }
         }
@@ -198,20 +183,13 @@ class MapGenerator {
         }
     
     public:
-        MapGenerator generateMapWithWaterLoop(int width, int height) {
-            MapGenerator map(width, height, falloffStart, falloffEnd);
-            while (!map.hasWaterAroundEdges()) {
-                map = MapGenerator(width, height, falloffStart, falloffEnd);
-            }
-            return map;
-        }
-    
-        MapGenerator(int w, int h, float start = 0.25f, float end = 0.75f) 
-            : width(w), height(h), falloffStart(start), falloffEnd(end), perlin(rand()) {
-            grid.resize(height);
+        MapGenerator(int w, int h, float scale, unsigned int seed = std::time(nullptr))
+            : width(w), height(h), islandScale(scale), perlin(seed) {
+            generateFalloffMap();
             heightMap.resize(height, std::vector<float>(width, 0.0f));
             generateHeightMap();
     
+            grid.resize(height);
             for (int i = 0; i < height; ++i) {
                 grid[i].reserve(width);
                 for (int j = 0; j < width; ++j) {
@@ -219,22 +197,26 @@ class MapGenerator {
                 }
             }
         }
-
-    void render() const {
-        float tileWidth = 2.0f / width;
-        float tileHeight = 2.0f / height;
-        for (int i = 0; i < height; ++i) {
-            for (int j = 0; j < width; ++j) {
-                glPushMatrix();
-                float x = -1.0f + j * tileWidth;
-                float y = 1.0f - (i + 1) * tileHeight;
-                glTranslatef(x, y, 0.0f);
-                glScalef(tileWidth, tileHeight, 1.0f);
-                grid[i][j].render();
-                glPopMatrix();
+    
+        void render() const {
+            const float tileWidth = 2.0f / width;
+            const float tileHeight = 2.0f / height;
+        
+            // Main terrain rendering
+            for (int y = 0; y < height; ++y) {
+                for (int x = 0; x < width; ++x) {
+                    glPushMatrix();
+                    // Calculate position with proper centering
+                    const float xPos = -1.0f + (x * tileWidth) + (tileWidth / 2.0f);
+                    const float yPos = 1.0f - (y * tileHeight) - (tileHeight / 2.0f);
+                    
+                    glTranslatef(xPos, yPos, 0.0f);
+                    glScalef(tileWidth, tileHeight, 1.0f);
+                    grid[y][x].render();
+                    glPopMatrix();
+                }
             }
         }
-    }
 
     void printToTerminal() const {
         for (int i = 0; i < height; ++i) {
@@ -365,6 +347,18 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
 }
 
 int main() {
+    std::cout << "Choose island size (S/M/L):\n";
+    std::cout << "S - Small (0.6)\nM - Medium (1.1)\nL - Large (1.6)\n> ";
+    char sizeChoice;
+    std::cin >> sizeChoice;
+
+    float islandScale = 1.1f; // Default to Medium
+    switch (toupper(sizeChoice)) {
+        case 'S': islandScale = 0.6f; break;
+        case 'M': islandScale = 1.1f; break;
+        case 'L': islandScale = 1.6f; break;
+        default: std::cout << "Invalid choice. Using Medium.\n";
+    }
     if (!glfwInit()) {
         std::cerr << "Failed to initialize GLFW!" << std::endl;
         return -1;
@@ -394,16 +388,9 @@ int main() {
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
 
-    // Generate the map with custom falloff parameters
-    const float falloffStart = 0.4f;  // 30% from center
-    const float falloffEnd = 0.9f;    // 80% from center
-
     
     // Create generator with custom falloff settings
-    map = new MapGenerator(mapWidth, mapHeight, falloffStart, falloffEnd);
-    
-    // Generate map with water around edges
-    *map = map->generateMapWithWaterLoop(mapWidth, mapHeight);
+    map = new MapGenerator(mapWidth, mapHeight, islandScale, std::time(nullptr));
 
     // Set up input callbacks
     glfwSetMouseButtonCallback(window, mouseButtonCallback);
