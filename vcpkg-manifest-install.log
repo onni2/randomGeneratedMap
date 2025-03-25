@@ -1,7 +1,7 @@
 Detecting compiler hash for triplet x64-windows...
 Compiler found: C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/cl.exe
 All requested packages are currently installed.
-Total install time: 881 us
+Total install time: 1.09 ms
 The package glew is compatible with built-in CMake targets:
 
     find_package(GLEW REQUIRED)

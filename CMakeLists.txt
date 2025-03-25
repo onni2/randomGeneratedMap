@@ -22,6 +22,10 @@ set(IMGUI_SOURCES
 # Add the src folder to the build (currently only main.cpp)
 add_executable(MyMapProject 
     src/main.cpp
+    src/MapGenerator.cpp
+    src/MapMarker.cpp
+    src/TextureManager.cpp
+    src/Terrain.cpp
     ${IMGUI_SOURCES}
 )
 
@@ -43,4 +47,5 @@ target_include_directories(MyMapProject PRIVATE
     include
     ${CMAKE_CURRENT_SOURCE_DIR}/imgui
     ${CMAKE_CURRENT_SOURCE_DIR}/imgui
+    ${CMAKE_CURRENT_SOURCE_DIR}/stb_image_write/stb-master
 )
