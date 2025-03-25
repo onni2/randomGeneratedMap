@@ -48,9 +48,57 @@ build CMakeFiles/MyMapProject.dir/src/main.cpp.obj: CXX_COMPILER__MyMapProject_u
   DEFINES = -DGLFW_DLL
   DEP_FILE = CMakeFiles\MyMapProject.dir\src\main.cpp.obj.d
   FLAGS = -std=gnu++17
-  INCLUDES = -IC:/Users/odinn/Desktop/vetur2025/c++/randomGeneratedMap/include -isystem C:/Users/odinn/Desktop/vetur2025/c++/randomGeneratedMap/vcpkg_installed/x64-windows/include
+  INCLUDES = -IC:/Users/odinn/Desktop/vetur2025/c++/randomGeneratedMap/include -IC:/Users/odinn/Desktop/vetur2025/c++/randomGeneratedMap/imgui -isystem C:/Users/odinn/Desktop/vetur2025/c++/randomGeneratedMap/vcpkg_installed/x64-windows/include
   OBJECT_DIR = CMakeFiles\MyMapProject.dir
   OBJECT_FILE_DIR = CMakeFiles\MyMapProject.dir\src
+
+build CMakeFiles/MyMapProject.dir/imgui/imgui.cpp.obj: CXX_COMPILER__MyMapProject_unscanned_ C$:/Users/odinn/Desktop/vetur2025/c++/randomGeneratedMap/imgui/imgui.cpp || cmake_object_order_depends_target_MyMapProject
+  DEFINES = -DGLFW_DLL
+  DEP_FILE = CMakeFiles\MyMapProject.dir\imgui\imgui.cpp.obj.d
+  FLAGS = -std=gnu++17
+  INCLUDES = -IC:/Users/odinn/Desktop/vetur2025/c++/randomGeneratedMap/include -IC:/Users/odinn/Desktop/vetur2025/c++/randomGeneratedMap/imgui -isystem C:/Users/odinn/Desktop/vetur2025/c++/randomGeneratedMap/vcpkg_installed/x64-windows/include
+  OBJECT_DIR = CMakeFiles\MyMapProject.dir
+  OBJECT_FILE_DIR = CMakeFiles\MyMapProject.dir\imgui
+
+build CMakeFiles/MyMapProject.dir/imgui/imgui_draw.cpp.obj: CXX_COMPILER__MyMapProject_unscanned_ C$:/Users/odinn/Desktop/vetur2025/c++/randomGeneratedMap/imgui/imgui_draw.cpp || cmake_object_order_depends_target_MyMapProject
+  DEFINES = -DGLFW_DLL
+  DEP_FILE = CMakeFiles\MyMapProject.dir\imgui\imgui_draw.cpp.obj.d
+  FLAGS = -std=gnu++17
+  INCLUDES = -IC:/Users/odinn/Desktop/vetur2025/c++/randomGeneratedMap/include -IC:/Users/odinn/Desktop/vetur2025/c++/randomGeneratedMap/imgui -isystem C:/Users/odinn/Desktop/vetur2025/c++/randomGeneratedMap/vcpkg_installed/x64-windows/include
+  OBJECT_DIR = CMakeFiles\MyMapProject.dir
+  OBJECT_FILE_DIR = CMakeFiles\MyMapProject.dir\imgui
+
+build CMakeFiles/MyMapProject.dir/imgui/imgui_widgets.cpp.obj: CXX_COMPILER__MyMapProject_unscanned_ C$:/Users/odinn/Desktop/vetur2025/c++/randomGeneratedMap/imgui/imgui_widgets.cpp || cmake_object_order_depends_target_MyMapProject
+  DEFINES = -DGLFW_DLL
+  DEP_FILE = CMakeFiles\MyMapProject.dir\imgui\imgui_widgets.cpp.obj.d
+  FLAGS = -std=gnu++17
+  INCLUDES = -IC:/Users/odinn/Desktop/vetur2025/c++/randomGeneratedMap/include -IC:/Users/odinn/Desktop/vetur2025/c++/randomGeneratedMap/imgui -isystem C:/Users/odinn/Desktop/vetur2025/c++/randomGeneratedMap/vcpkg_installed/x64-windows/include
+  OBJECT_DIR = CMakeFiles\MyMapProject.dir
+  OBJECT_FILE_DIR = CMakeFiles\MyMapProject.dir\imgui
+
+build CMakeFiles/MyMapProject.dir/imgui/imgui_tables.cpp.obj: CXX_COMPILER__MyMapProject_unscanned_ C$:/Users/odinn/Desktop/vetur2025/c++/randomGeneratedMap/imgui/imgui_tables.cpp || cmake_object_order_depends_target_MyMapProject
+  DEFINES = -DGLFW_DLL
+  DEP_FILE = CMakeFiles\MyMapProject.dir\imgui\imgui_tables.cpp.obj.d
+  FLAGS = -std=gnu++17
+  INCLUDES = -IC:/Users/odinn/Desktop/vetur2025/c++/randomGeneratedMap/include -IC:/Users/odinn/Desktop/vetur2025/c++/randomGeneratedMap/imgui -isystem C:/Users/odinn/Desktop/vetur2025/c++/randomGeneratedMap/vcpkg_installed/x64-windows/include
+  OBJECT_DIR = CMakeFiles\MyMapProject.dir
+  OBJECT_FILE_DIR = CMakeFiles\MyMapProject.dir\imgui
+
+build CMakeFiles/MyMapProject.dir/imgui/imgui_impl_glfw.cpp.obj: CXX_COMPILER__MyMapProject_unscanned_ C$:/Users/odinn/Desktop/vetur2025/c++/randomGeneratedMap/imgui/imgui_impl_glfw.cpp || cmake_object_order_depends_target_MyMapProject
+  DEFINES = -DGLFW_DLL
+  DEP_FILE = CMakeFiles\MyMapProject.dir\imgui\imgui_impl_glfw.cpp.obj.d
+  FLAGS = -std=gnu++17
+  INCLUDES = -IC:/Users/odinn/Desktop/vetur2025/c++/randomGeneratedMap/include -IC:/Users/odinn/Desktop/vetur2025/c++/randomGeneratedMap/imgui -isystem C:/Users/odinn/Desktop/vetur2025/c++/randomGeneratedMap/vcpkg_installed/x64-windows/include
+  OBJECT_DIR = CMakeFiles\MyMapProject.dir
+  OBJECT_FILE_DIR = CMakeFiles\MyMapProject.dir\imgui
+
+build CMakeFiles/MyMapProject.dir/imgui/imgui_impl_opengl3.cpp.obj: CXX_COMPILER__MyMapProject_unscanned_ C$:/Users/odinn/Desktop/vetur2025/c++/randomGeneratedMap/imgui/imgui_impl_opengl3.cpp || cmake_object_order_depends_target_MyMapProject
+  DEFINES = -DGLFW_DLL
+  DEP_FILE = CMakeFiles\MyMapProject.dir\imgui\imgui_impl_opengl3.cpp.obj.d
+  FLAGS = -std=gnu++17
+  INCLUDES = -IC:/Users/odinn/Desktop/vetur2025/c++/randomGeneratedMap/include -IC:/Users/odinn/Desktop/vetur2025/c++/randomGeneratedMap/imgui -isystem C:/Users/odinn/Desktop/vetur2025/c++/randomGeneratedMap/vcpkg_installed/x64-windows/include
+  OBJECT_DIR = CMakeFiles\MyMapProject.dir
+  OBJECT_FILE_DIR = CMakeFiles\MyMapProject.dir\imgui
 
 
 # =============================================================================
@@ -60,7 +108,7 @@ build CMakeFiles/MyMapProject.dir/src/main.cpp.obj: CXX_COMPILER__MyMapProject_u
 #############################################
 # Link the executable MyMapProject.exe
 
-build MyMapProject.exe: CXX_EXECUTABLE_LINKER__MyMapProject_ CMakeFiles/MyMapProject.dir/src/main.cpp.obj | vcpkg_installed/x64-windows/debug/lib/glfw3dll.lib vcpkg_installed/x64-windows/debug/lib/glew32d.lib
+build MyMapProject.exe: CXX_EXECUTABLE_LINKER__MyMapProject_ CMakeFiles/MyMapProject.dir/src/main.cpp.obj CMakeFiles/MyMapProject.dir/imgui/imgui.cpp.obj CMakeFiles/MyMapProject.dir/imgui/imgui_draw.cpp.obj CMakeFiles/MyMapProject.dir/imgui/imgui_widgets.cpp.obj CMakeFiles/MyMapProject.dir/imgui/imgui_tables.cpp.obj CMakeFiles/MyMapProject.dir/imgui/imgui_impl_glfw.cpp.obj CMakeFiles/MyMapProject.dir/imgui/imgui_impl_opengl3.cpp.obj | vcpkg_installed/x64-windows/debug/lib/glfw3dll.lib vcpkg_installed/x64-windows/debug/lib/glew32d.lib
   LINK_LIBRARIES = vcpkg_installed/x64-windows/debug/lib/glfw3dll.lib  vcpkg_installed/x64-windows/debug/lib/glew32d.lib  -lopengl32  -lopengl32  -lglu32  -lkernel32 -luser32 -lgdi32 -lwinspool -lshell32 -lole32 -loleaut32 -luuid -lcomdlg32 -ladvapi32
   OBJECT_DIR = CMakeFiles\MyMapProject.dir
   POST_BUILD = C:\WINDOWS\system32\cmd.exe /C "cd /D C:\Users\odinn\Desktop\vetur2025\c++\randomGeneratedMap && "C:\Program Files\PowerShell\7\pwsh.exe" -noprofile -executionpolicy Bypass -file C:/Users/odinn/Desktop/vetur2025/c++/randomGeneratedMap/vcpkg/scripts/buildsystems/msbuild/applocal.ps1 -targetBinary C:/Users/odinn/Desktop/vetur2025/c++/randomGeneratedMap/MyMapProject.exe -installedDir C:/Users/odinn/Desktop/vetur2025/c++/randomGeneratedMap/vcpkg_installed/x64-windows/bin -OutVariable out"

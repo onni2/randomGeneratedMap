@@ -9,8 +9,21 @@ set(CMAKE_CXX_STANDARD 17)
 # Add the vcpkg toolchain file to link dependencies
 set(CMAKE_TOOLCHAIN_FILE "C:/Users/odinn/Desktop/vetur2025/c++/randomGeneratedMap/vcpkg/scripts/buildsystems/vcpkg.cmake" CACHE STRING "")
 
+# Collect ImGui source files
+set(IMGUI_SOURCES
+    ${CMAKE_CURRENT_SOURCE_DIR}/imgui/imgui.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/imgui/imgui_draw.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/imgui/imgui_widgets.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/imgui/imgui_tables.cpp  # if using tables
+    ${CMAKE_CURRENT_SOURCE_DIR}/imgui/imgui_impl_glfw.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/imgui/imgui_impl_opengl3.cpp
+)
+
 # Add the src folder to the build (currently only main.cpp)
-add_executable(MyMapProject src/main.cpp)
+add_executable(MyMapProject 
+    src/main.cpp
+    ${IMGUI_SOURCES}
+)
 
 # Find and link the GLFW3, GLEW, and OpenGL packages via vcpkg
 find_package(glfw3 REQUIRED)
@@ -26,4 +39,8 @@ target_link_libraries(MyMapProject PRIVATE
 
 
 # Include header files from the include directory
-target_include_directories(MyMapProject PRIVATE include)
+target_include_directories(MyMapProject PRIVATE 
+    include
+    ${CMAKE_CURRENT_SOURCE_DIR}/imgui
+    ${CMAKE_CURRENT_SOURCE_DIR}/imgui
+)

@@ -5,9 +5,13 @@
 #include <ctime>
 #include <cmath>
 #include <algorithm>
-#include <fstream>  // Include this header for std::ofstream
+#include <fstream>
 #include <GLFW/glfw3.h>
-#include "../perlin/PerlinNoise.hpp"  // Adjust path as needed
+#include "../perlin/PerlinNoise.hpp"
+#include "../imgui/imgui.h"
+#include "../imgui/imgui_impl_glfw.h"
+#include "../imgui/imgui_impl_opengl3.h"
+#include <unordered_map>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846f
@@ -16,29 +20,182 @@
 int mapWidth = 300;
 int mapHeight = 300;
 
-// Terrain Types
+enum MapMarkerType { CAVE, STOWN, CAMP }; 
+
+
+// Add new MapMarker class
+class MapMarker {
+    public:
+        MapMarkerType type;
+        int x, y;
+        GLuint texture;
+        float size;
+    
+        MapMarker(MapMarkerType t, int posX, int posY, GLuint tex, float sz = 0.05f)
+            : type(t), x(posX), y(posY), texture(tex), size(sz) {}
+    
+            void render() const {
+                glEnable(GL_BLEND);
+                glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+                glEnable(GL_TEXTURE_2D);
+                glBindTexture(GL_TEXTURE_2D, texture);
+                
+                // Adjust size calculation
+                float aspect = (float)mapWidth/(float)mapHeight;
+                float xSize = size * aspect;
+                float ySize = size;
+                
+                glBegin(GL_QUADS);
+                float xPos = -1.0f + (2.0f * x / mapWidth);
+                float yPos = -1.0f + (2.0f * y / mapHeight);
+                
+                // Flip texture coordinates vertically
+                glTexCoord2f(0, 1); glVertex2f(xPos - xSize, yPos - ySize);
+                glTexCoord2f(1, 1); glVertex2f(xPos + xSize, yPos - ySize);
+                glTexCoord2f(1, 0); glVertex2f(xPos + xSize, yPos + ySize);
+                glTexCoord2f(0, 0); glVertex2f(xPos - xSize, yPos + ySize);
+                glEnd();
+                
+                glDisable(GL_TEXTURE_2D);
+                glDisable(GL_BLEND);
+            }
+    };
+    class TextureManager {
+        std::unordered_map<MapMarkerType, GLuint> textures;
+        
+        bool pointInTriangle(float x, float y, float x1, float y1, float x2, float y2, float x3, float y3) const {
+            float denominator = ((y2 - y3)*(x1 - x3) + (x3 - x2)*(y1 - y3));
+            if (denominator == 0) return false;
+            float a = ((y2 - y3)*(x - x3) + (x3 - x2)*(y - y3)) / denominator;
+            float b = ((y3 - y1)*(x - x3) + (x1 - x3)*(y - y3)) / denominator;
+            float c = 1 - a - b;
+            return a >= 0 && b >= 0 && c >= 0;
+        }
+    
+    public:
+    void generateDefaultTextures() {
+        generateTexture(CAVE, {128, 128, 128, 255}); // Grey cave entrance
+        generateTexture(STOWN, {200, 50, 50, 255});   // Red roof house
+        generateTexture(CAMP, {139, 69, 19, 255});    // Brown tent
+    }
+
+    void generateTexture(MapMarkerType type, std::array<GLubyte, 4> color) {
+        const int size = 16;
+        std::vector<GLubyte> pixels(size * size * 4, 0);
+    
+        for(int y = 0; y < size; y++) {
+            for(int x = 0; x < size; x++) {
+                int idx = (y * size + x) * 4;
+                bool inShape = false;
+    
+                // Flip Y coordinate for OpenGL texture space
+                float fy = 1.0f - (y + 0.5f) / size;
+                float fx = (x + 0.5f) / size;
+    
+                switch(type) {
+                    case CAVE: { // Grey arch with black outline
+                        // Outer grey semicircle (larger)
+                        float outer_radius = 0.4f;
+                        float inner_radius = 0.3f;
+                        float dx = fx - 0.5f;
+                        float dy = fy - 0.2f;
+                        
+                        if (dx*dx + dy*dy <= outer_radius*outer_radius && dy > -0.1f) {
+                            // Black inner semicircle
+                            if (dx*dx + dy*dy > inner_radius*inner_radius) {
+                                pixels[idx+0] = 128; // Grey
+                                pixels[idx+1] = 128;
+                                pixels[idx+2] = 128;
+                                pixels[idx+3] = 255;
+                            } else { // Black center
+                                pixels[idx+0] = 0;
+                                pixels[idx+1] = 0;
+                                pixels[idx+2] = 0;
+                                pixels[idx+3] = 255;
+                            }
+                        }
+                        break;
+                    }
+                    case STOWN: { // House with red roof
+                        // House body (square)
+                        if (fy > 0.3f && fy < 0.7f && fx > 0.25f && fx < 0.75f) {
+                            pixels[idx+0] = 200; // Gray walls
+                            pixels[idx+1] = 200;
+                            pixels[idx+2] = 200;
+                            pixels[idx+3] = 255;
+                        }
+                        // Roof triangle
+                        if (pointInTriangle(x, y, 
+                            size/4, size/2, 
+                            3*size/4, size/2, 
+                            size/2, size/4)) {
+                            inShape = true;
+                        }
+                        break;
+                    }
+                    case CAMP: { // Smaller brown tent
+                        // Triangle points (centered and smaller)
+                        float center_x = 0.5f;
+                        float center_y = 0.5f;
+                        float tent_width = 0.3f;
+                        float tent_height = 0.4f;
+                        
+                        bool inTriangle = pointInTriangle(
+                            x, y,
+                            size*(center_x - tent_width/2), size*(center_y + tent_height),  // Left base
+                            size*(center_x + tent_width/2), size*(center_y + tent_height),  // Right base
+                            size*center_x, size*(center_y - tent_height)                    // Peak
+                        );
+                        
+                        if (inTriangle) {
+                            pixels[idx+0] = color[0]; // Brown
+                            pixels[idx+1] = color[1];
+                            pixels[idx+2] = color[2];
+                            pixels[idx+3] = 255;
+                        }
+                        break;
+                    }
+                }
+    
+                if (inShape) {
+                    pixels[idx+0] = color[0];
+                    pixels[idx+1] = color[1];
+                    pixels[idx+2] = color[2];
+                    pixels[idx+3] = 255; // Force full opacity
+                }
+            }
+        }
+    
+            GLuint texID;
+            glGenTextures(1, &texID);
+            glBindTexture(GL_TEXTURE_2D, texID);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, size, size, 0,
+                        GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            
+            textures[type] = texID;
+        }
+    
+        GLuint getTexture(MapMarkerType type) const {
+            auto it = textures.find(type);
+            return (it != textures.end()) ? it->second : 0;
+        }
+    };
+
+// Terrain Types (removed render methods)
 class Terrain {
 public:
     virtual ~Terrain() = default;
-    virtual void render() const = 0;
     virtual char getSymbol() const = 0;
     virtual void getColor(unsigned char& r, unsigned char& g, unsigned char& b) const = 0;
 };
 
 class Water : public Terrain {
 public:
-    void render() const override {
-        glColor3f(0.0f, 0.0f, 1.0f);
-        glBegin(GL_QUADS);
-            glVertex2f(0.0f, 0.0f);
-            glVertex2f(1.0f, 0.0f);
-            glVertex2f(1.0f, 1.0f);
-            glVertex2f(0.0f, 1.0f);
-        glEnd();
-    }
     char getSymbol() const override { return 'W'; }
     void getColor(unsigned char& r, unsigned char& g, unsigned char& b) const override {
-        r = 0; g = 0; b = 255; // Blue for water
+        r = 0; g = 0; b = 255;
     }
 };
 
@@ -46,53 +203,25 @@ class Grass : public Terrain {
 public:
     int value;
     Grass(int v) : value(v) {}
-    void render() const override {
-        float greenShade = 0.1f * value;
-        glColor3f(0.0f, greenShade, 0.0f);
-        glBegin(GL_QUADS);
-            glVertex2f(0.0f, 0.0f);
-            glVertex2f(1.0f, 0.0f);
-            glVertex2f(1.0f, 1.0f);
-            glVertex2f(0.0f, 1.0f);
-        glEnd();
-    }
     char getSymbol() const override { return 'G'; }
     void getColor(unsigned char& r, unsigned char& g, unsigned char& b) const override {
-        r = 0; g = static_cast<unsigned char>(value * 25); b = 0; // Green for grass
+        r = 0; g = static_cast<unsigned char>(value * 25); b = 0;
     }
 };
 
 class Stone : public Terrain {
 public:
-    void render() const override {
-        glColor3f(0.5f, 0.5f, 0.5f);
-        glBegin(GL_QUADS);
-            glVertex2f(0.0f, 0.0f);
-            glVertex2f(1.0f, 0.0f);
-            glVertex2f(1.0f, 1.0f);
-            glVertex2f(0.0f, 1.0f);
-        glEnd();
-    }
     char getSymbol() const override { return 'S'; }
     void getColor(unsigned char& r, unsigned char& g, unsigned char& b) const override {
-        r = 128; g = 128; b = 128; // Gray for stone
+        r = 128; g = 128; b = 128;
     }
 };
 
 class Beach : public Terrain {
 public:
-    void render() const override {
-        glColor3f(0.96f, 0.87f, 0.7f); // Sandy color
-        glBegin(GL_QUADS);
-            glVertex2f(0.0f, 0.0f);
-            glVertex2f(1.0f, 0.0f);
-            glVertex2f(1.0f, 1.0f);
-            glVertex2f(0.0f, 1.0f);
-        glEnd();
-    }
     char getSymbol() const override { return 'B'; }
     void getColor(unsigned char& r, unsigned char& g, unsigned char& b) const override {
-        r = 245; g = 222; b = 179; // Sandy color for beach
+        r = 245; g = 222; b = 179;
     }
 };
 
@@ -100,168 +229,119 @@ class TerrainTile {
 public:
     std::unique_ptr<Terrain> terrain;
     TerrainTile(std::unique_ptr<Terrain> t) : terrain(std::move(t)) {}
-    void render() const {
-        if (terrain)
-            terrain->render();
-        else
-            std::cerr << "Error: Null terrain in TerrainTile!" << std::endl;
-    }
     char getSymbol() const { return terrain ? terrain->getSymbol() : ' '; }
     void getColor(unsigned char& r, unsigned char& g, unsigned char& b) const {
-        if (terrain)
-            terrain->getColor(r, g, b);
-        else
-            r = g = b = 0; // Black for null terrain
+        if (terrain) terrain->getColor(r, g, b);
+        else r = g = b = 0;
     }
 };
 
 class MapGenerator {
-    private:
-        int width, height;
-        float islandScale;
-        std::vector<std::vector<TerrainTile>> grid;
-        std::vector<std::vector<float>> heightMap;
-        std::vector<std::vector<float>> falloffMap;
-        siv::PerlinNoise perlin;
-    
-        void generateFalloffMap() {
-            falloffMap.resize(height, std::vector<float>(width));
-            const float centerX = (width - 1) / 2.0f;
-            const float centerY = (height - 1) / 2.0f;
-    
-            for (int y = 0; y < height; ++y) {
-                for (int x = 0; x < width; ++x) {
-                    // Use member variable islandScale
-                    float dx = (x - centerX) / (centerX * islandScale);
-                    float dy = (y - centerY) / (centerY * islandScale);
-                    float distance = std::sqrt(dx*dx + dy*dy);
-                    
-                    distance = std::clamp(distance, 0.0f, 1.0f);
-                    distance = distance * distance * (3.0f - 2.0f * distance);
-                    falloffMap[y][x] = 1.0f - distance;
-                }
-            }
-        }
-    
-        void generateHeightMap() {
-            const float baseScale = 0.03f;  // More zoomed-out noise
-            const int octaves = 9;
-            const float persistence = 0.5f;
-            const float lacunarity = 2.0f;
-    
-            // ... rest of height map generation ...
-    
-            for (int i = 0; i < height; ++i) {
-                for (int j = 0; j < width; ++j) {
-                    float amplitude = 1.0f;
-                    float frequency = 1.0f;
-                    float noiseHeight = 0.0f;
-    
-                    for (int o = 0; o < octaves; ++o) {
-                        float sampleX = j * baseScale * frequency;
-                        float sampleY = i * baseScale * frequency;
-                        float perlinValue = perlin.noise2D(sampleX, sampleY);
-                        
-                        noiseHeight += perlinValue * amplitude;
-                        amplitude *= persistence;
-                        frequency *= lacunarity;
-                    }
-    
-                    // Apply falloff and normalize
-                    noiseHeight = (noiseHeight + 1) / 2.0f;  // Remap to [0..1]
-                    noiseHeight *= falloffMap[i][j];          // Apply island shape
-                    heightMap[i][j] = noiseHeight;
-                }
-            }
-        }
-    
-        std::unique_ptr<Terrain> generateTerrainFromHeight(float h) {
-            if (h < 0.3f) return std::make_unique<Water>();
-            if (h < 0.35f) return std::make_unique<Beach>();
-            if (h < 0.7f) return std::make_unique<Grass>(static_cast<int>(h * 10));
-            return std::make_unique<Stone>();
-        }
-    
-    public:
-        MapGenerator(int w, int h, float scale, unsigned int seed = std::time(nullptr))
-            : width(w), height(h), islandScale(scale), perlin(seed) {
-            generateFalloffMap();
-            heightMap.resize(height, std::vector<float>(width, 0.0f));
-            generateHeightMap();
-    
-            grid.resize(height);
-            for (int i = 0; i < height; ++i) {
-                grid[i].reserve(width);
-                for (int j = 0; j < width; ++j) {
-                    grid[i].emplace_back(generateTerrainFromHeight(heightMap[i][j]));
-                }
-            }
-        }
-    
-        void render() const {
-            const float tileWidth = 2.0f / width;
-            const float tileHeight = 2.0f / height;
-        
-            // Main terrain rendering
-            for (int y = 0; y < height; ++y) {
-                for (int x = 0; x < width; ++x) {
-                    glPushMatrix();
-                    // Calculate position with proper centering
-                    const float xPos = -1.0f + (x * tileWidth) + (tileWidth / 2.0f);
-                    const float yPos = 1.0f - (y * tileHeight) - (tileHeight / 2.0f);
-                    
-                    glTranslatef(xPos, yPos, 0.0f);
-                    glScalef(tileWidth, tileHeight, 1.0f);
-                    grid[y][x].render();
-                    glPopMatrix();
-                }
-            }
-        }
+private:
+    int width, height;
+    float islandScale;
+    std::vector<std::vector<TerrainTile>> grid;
+    std::vector<std::vector<float>> heightMap;
+    std::vector<std::vector<float>> falloffMap;
+    siv::PerlinNoise perlin;
+    bool isDirty = true;
 
-    void printToTerminal() const {
-        for (int i = 0; i < height; ++i) {
-            for (int j = 0; j < width; ++j)
-                std::cout << grid[i][j].getSymbol() << " ";
-            std::cout << std::endl;
+    // Perlin parameters
+    int octaves;
+    float persistence;
+    float lacunarity;
+    float baseScale;
+
+    void generateFalloffMap() {
+        falloffMap.resize(height, std::vector<float>(width));
+        const float centerX = (width - 1) / 2.0f;
+        const float centerY = (height - 1) / 2.0f;
+
+        for (int y = 0; y < height; ++y) {
+            for (int x = 0; x < width; ++x) {
+                float dx = (x - centerX) / (centerX * islandScale);
+                float dy = (y - centerY) / (centerY * islandScale);
+                float distance = std::sqrt(dx*dx + dy*dy);
+                
+                distance = std::clamp(distance, 0.0f, 1.0f);
+                distance = distance * distance * (3.0f - 2.0f * distance);
+                falloffMap[y][x] = 1.0f - distance;
+            }
         }
     }
 
-    // Add this method to modify the terrain at a specific coordinate
-    void setTerrain(int x, int y, std::unique_ptr<Terrain> terrain) {
-        if (x >= 0 && x < width && y >= 0 && y < height) {
-            grid[y][x].terrain = std::move(terrain);
-        } else {
-            std::cerr << "Error: Coordinates out of bounds!" << std::endl;
-        }
-    }
-
-    // Export the map to a PPM file
-    void exportToPPM(const std::string& filename) const {
-        std::ofstream file(filename);
-        if (!file.is_open()) {
-            std::cerr << "Error: Could not open file for writing!" << std::endl;
-            return;
-        }
-
-        // Write PPM header
-        file << "P3\n"; // PPM magic number (text-based RGB format)
-        file << width << " " << height << "\n"; // Image dimensions
-        file << "255\n"; // Maximum color value
-
-        // Write pixel data
+    void generateHeightMap() {
+        heightMap.resize(height, std::vector<float>(width, 0.0f));
         for (int i = 0; i < height; ++i) {
             for (int j = 0; j < width; ++j) {
-                unsigned char r, g, b;
-                grid[i][j].getColor(r, g, b);
-                file << static_cast<int>(r) << " "
-                     << static_cast<int>(g) << " "
-                     << static_cast<int>(b) << " ";
-            }
-            file << "\n";
-        }
+                float amplitude = 1.0f;
+                float frequency = 1.0f;
+                float noiseHeight = 0.0f;
 
-        file.close();
-        std::cout << "Map exported to " << filename << std::endl;
+                for (int o = 0; o < octaves; ++o) {
+                    float sampleX = j * baseScale * frequency;
+                    float sampleY = i * baseScale * frequency;
+                    float perlinValue = perlin.noise2D(sampleX, sampleY);
+                    
+                    noiseHeight += perlinValue * amplitude;
+                    amplitude *= persistence;
+                    frequency *= lacunarity;
+                }
+
+                noiseHeight = (noiseHeight + 1) / 2.0f;
+                noiseHeight *= falloffMap[i][j];
+                heightMap[i][j] = noiseHeight;
+            }
+        }
+    }
+
+    std::unique_ptr<Terrain> generateTerrainFromHeight(float h) {
+        if (h < 0.3f) return std::make_unique<Water>();
+        if (h < 0.35f) return std::make_unique<Beach>();
+        if (h < 0.7f) return std::make_unique<Grass>(static_cast<int>(h * 10));
+        return std::make_unique<Stone>();
+    }
+
+public:
+    MapGenerator(int w, int h, float scale, unsigned int seed, 
+               int oct, float pers, float lac, float nScale)
+        : width(w), height(h), islandScale(scale), perlin(seed),
+          octaves(oct), persistence(pers), lacunarity(lac), baseScale(nScale) {
+        generateFalloffMap();
+        generateHeightMap();
+
+        grid.resize(height);
+        for (int i = 0; i < height; ++i) {
+            for (int j = 0; j < width; ++j) {
+                grid[i].emplace_back(generateTerrainFromHeight(heightMap[i][j]));
+            }
+        }
+    }
+
+    void generateTextureData(std::vector<unsigned char>& data) const {
+        data.resize(width * height * 3);
+        for (int y = 0; y < height; ++y) {
+            for (int x = 0; x < width; ++x) {
+                unsigned char r, g, b;
+                grid[y][x].getColor(r, g, b);
+                int index = (y * width + x) * 3;
+                data[index] = r;
+                data[index + 1] = g;
+                data[index + 2] = b;
+            }
+        }
+    }
+
+    bool getIsDirty() const { return isDirty; }
+    void markClean() { isDirty = false; }
+
+    void setTerrain(int x, int y, std::unique_ptr<Terrain> terrain) {
+        // Flip Y-axis to match OpenGL's coordinate system
+        int invertedY = height - 1 - y;
+        if (x >= 0 && x < width && invertedY >= 0 && invertedY < height) {
+            grid[invertedY][x].terrain = std::move(terrain);
+            isDirty = true;
+        }
     }
 
     void invertTextures() {
@@ -274,30 +354,56 @@ class MapGenerator {
                     case 'W': newTerrain = std::make_unique<Stone>(); break;
                     case 'S': newTerrain = std::make_unique<Water>(); break;
                     case 'G': newTerrain = std::make_unique<Beach>(); break;
-                    case 'B': newTerrain = std::make_unique<Grass>(5); break; // Default grass value
+                    case 'B': newTerrain = std::make_unique<Grass>(5); break;
                     default: newTerrain = std::make_unique<Water>(); break;
                 }
                 
                 grid[i][j].terrain = std::move(newTerrain);
             }
         }
+        isDirty = true;
     }
 
+    void exportToPPM(const std::string& filename) const {
+        std::ofstream file(filename);
+        if (!file.is_open()) return;
+
+        file << "P3\n" << width << " " << height << "\n255\n";
+        for (int i = 0; i < height; ++i) {
+            for (int j = 0; j < width; ++j) {
+                unsigned char r, g, b;
+                grid[i][j].getColor(r, g, b);
+                file << static_cast<int>(r) << " "
+                     << static_cast<int>(g) << " "
+                     << static_cast<int>(b) << " ";
+            }
+            file << "\n";
+        }
+        file.close();
+    }
 };
 
-// Global variables for map and editing state
+// Global variables
 MapGenerator* map = nullptr;
-char currentTerrainType = 'W'; // Default to water
-int brushRadius = 3; // Radius of the brush in tiles
-bool isMousePressed = false; // Track if the mouse button is pressed
+GLuint textureID;
+char currentTerrainType = 'W';
+int brushRadius = 3;
+bool isMousePressed = false;
+TextureManager textureManager;
+std::vector<MapMarker> mapMarkers;
+MapMarkerType currentMarkerType = CAVE;
+bool placementMode = false;
+bool removalMode = false;
+
 
 // Function to edit a circle of tiles around the cursor
 void editCircle(int centerX, int centerY) {
     for (int i = -brushRadius; i <= brushRadius; ++i) {
         for (int j = -brushRadius; j <= brushRadius; ++j) {
-            if (i * i + j * j <= brushRadius * brushRadius) { // Check if within circle
+            if (i * i + j * j <= brushRadius * brushRadius) {
                 int tileX = centerX + i;
-                int tileY = centerY + j;
+                int tileY = centerY + j;  // Now using correct Y-axis orientation
+                
                 switch (currentTerrainType) {
                     case 'W': map->setTerrain(tileX, tileY, std::make_unique<Water>()); break;
                     case 'G': map->setTerrain(tileX, tileY, std::make_unique<Grass>(5)); break;
@@ -310,29 +416,84 @@ void editCircle(int centerX, int centerY) {
     }
 }
 
-// Mouse callback function
 void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
+    ImGui_ImplGlfw_MouseButtonCallback(window, button, action, mods);
+    if (ImGui::GetIO().WantCaptureMouse) return;
+
     if (button == GLFW_MOUSE_BUTTON_LEFT) {
         if (action == GLFW_PRESS) {
+            // Handle single-click actions
+            double xpos, ypos;
+            glfwGetCursorPos(window, &xpos, &ypos);
+            
+            // Convert to map coordinates with corrected Y-axis
+            int tileX = static_cast<int>(xpos / (900.0 / mapWidth));
+            int tileY = static_cast<int>((900.0 - ypos) / (900.0 / mapHeight));
+            tileX = std::clamp(tileX, 0, mapWidth - 1);
+            tileY = std::clamp(tileY, 0, mapHeight - 1);
+
+            if (placementMode) {
+                // Marker placement
+                bool canPlace = true;
+                for (const auto& marker : mapMarkers) {
+                    if (abs(marker.x - tileX) < 5 && abs(marker.y - tileY) < 5) {
+                        canPlace = false;
+                        break;
+                    }
+                }
+                if (canPlace) {
+                    mapMarkers.emplace_back(
+                        currentMarkerType,
+                        tileX,
+                        tileY,
+                        textureManager.getTexture(currentMarkerType),
+                        0.04f
+                    );
+                }
+            }
+            else if (removalMode) {
+                // Marker removal
+                auto it = mapMarkers.begin();
+                while (it != mapMarkers.end()) {
+                    if (abs(it->x - tileX) < 3 && abs(it->y - tileY) < 3) {
+                        it = mapMarkers.erase(it);
+                    } else {
+                        ++it;
+                    }
+                }
+            }
+            
             isMousePressed = true;
-        } else if (action == GLFW_RELEASE) {
+        }
+        else if (action == GLFW_RELEASE) {
             isMousePressed = false;
         }
     }
 }
 
-// Cursor position callback function
+
 void cursorPositionCallback(GLFWwindow* window, double xpos, double ypos) {
-    if (isMousePressed) {
+    ImGui_ImplGlfw_CursorPosCallback(window, xpos, ypos);
+    if (ImGui::GetIO().WantCaptureMouse) return;
+
+    if (isMousePressed && !placementMode && !removalMode) {
         // Convert screen coordinates to map coordinates
         int tileX = static_cast<int>(xpos / (900.0 / mapWidth));
-        int tileY = static_cast<int>(ypos / (900.0 / mapHeight));
-        editCircle(tileX, tileY); // Edit a circle of tiles
+        int tileY = static_cast<int>((900.0 - ypos) / (900.0 / mapHeight));  
+        
+        tileX = std::clamp(tileX, 0, mapWidth - 1);
+        tileY = std::clamp(tileY, 0, mapHeight - 1);
+
+        editCircle(tileX, tileY);
     }
 }
 
+
 // Key callback function to switch terrain types
 void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
+    ImGui_ImplGlfw_KeyCallback(window, key, scancode, action, mods);
+    if (ImGui::GetIO().WantCaptureKeyboard) return;
+
     if (action == GLFW_PRESS) {
         switch (key) {
             case GLFW_KEY_W: currentTerrainType = 'W'; std::cout << "Selected: Water" << std::endl; break;
@@ -347,65 +508,134 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
 }
 
 int main() {
-    std::cout << "Choose island size (S/M/L):\n";
-    std::cout << "S - Small (0.6)\nM - Medium (1.1)\nL - Large (1.6)\n> ";
-    char sizeChoice;
-    std::cin >> sizeChoice;
+    if (!glfwInit()) return -1;
+    GLFWwindow* window = glfwCreateWindow(900, 900, "Optimized Terrain Map", nullptr, nullptr);
+    glfwMakeContextCurrent(window);  
+    textureManager.generateDefaultTextures();  
 
-    float islandScale = 1.1f; // Default to Medium
-    switch (toupper(sizeChoice)) {
-        case 'S': islandScale = 0.6f; break;
-        case 'M': islandScale = 1.1f; break;
-        case 'L': islandScale = 1.6f; break;
-        default: std::cout << "Invalid choice. Using Medium.\n";
-    }
-    if (!glfwInit()) {
-        std::cerr << "Failed to initialize GLFW!" << std::endl;
-        return -1;
-    }
+    // Initialize texture
+    glGenTextures(1, &textureID);
+    glBindTexture(GL_TEXTURE_2D, textureID);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
-    GLFWwindow* window = glfwCreateWindow(900, 900, "Island Terrain Map", nullptr, nullptr);
-    if (!window) {
-        std::cerr << "Failed to open GLFW window!" << std::endl;
-        glfwTerminate();
-        return -1;
-    }
-    glfwMakeContextCurrent(window);
+    // Initialize ImGui
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGuiIO& io = ImGui::GetIO(); (void)io;
+    ImGui_ImplGlfw_InitForOpenGL(window, true);
+    ImGui_ImplOpenGL3_Init("#version 130");
+    ImGui::StyleColorsDark();
 
-    int fbWidth, fbHeight;
-    glfwGetFramebufferSize(window, &fbWidth, &fbHeight);
-    glViewport(0, 0, fbWidth, fbHeight);
-    glMatrixMode(GL_PROJECTION);
-    glLoadIdentity();
+    // Initial parameters
+    float islandScale = 1.1f;
+    int seed = static_cast<int>(std::time(nullptr));
+    int octaves = 9;
+    float persistence = 0.5f;
+    float lacunarity = 2.0f;
+    float noiseScale = 0.03f;
 
-    float aspectRatio = static_cast<float>(fbWidth) / fbHeight;
-    if (aspectRatio > 1.0f) {
-        glOrtho(-aspectRatio, aspectRatio, -1, 1, -1, 1);
-    } else {
-        glOrtho(-1, 1, -1 / aspectRatio, 1 / aspectRatio, -1, 1);
-    }
+    map = new MapGenerator(mapWidth, mapHeight, islandScale, seed, 
+                          octaves, persistence, lacunarity, noiseScale);
 
-    glMatrixMode(GL_MODELVIEW);
-    glLoadIdentity();
+    // Initial texture upload
+    std::vector<unsigned char> textureData;
+    map->generateTextureData(textureData);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, mapWidth, mapHeight, 0, 
+                GL_RGB, GL_UNSIGNED_BYTE, textureData.data());
+    map->markClean();
 
-    
-    // Create generator with custom falloff settings
-    map = new MapGenerator(mapWidth, mapHeight, islandScale, std::time(nullptr));
-
-    // Set up input callbacks
     glfwSetMouseButtonCallback(window, mouseButtonCallback);
     glfwSetCursorPosCallback(window, cursorPositionCallback);
     glfwSetKeyCallback(window, keyCallback);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     while (!glfwWindowShouldClose(window)) {
-        glClear(GL_COLOR_BUFFER_BIT);
-        map->render();
-        glfwSwapBuffers(window);
         glfwPollEvents();
+
+        // Update texture if needed
+        if (map->getIsDirty()) {
+            map->generateTextureData(textureData);
+            glBindTexture(GL_TEXTURE_2D, textureID);
+            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, mapWidth, mapHeight,
+                           GL_RGB, GL_UNSIGNED_BYTE, textureData.data());
+            map->markClean();
+        }
+
+        // Start ImGui frame
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
+
+        // Terrain Controls Window
+        ImGui::Begin("Terrain Controls");
+        ImGui::SliderFloat("Island Scale", &islandScale, 0.5f, 2.0f);
+        ImGui::InputInt("Seed", &seed);
+        ImGui::SliderInt("Octaves", &octaves, 1, 16);
+
+        if (ImGui::Button("Regenerate")) {
+            delete map;
+            map = new MapGenerator(mapWidth, mapHeight, islandScale, seed, 
+                                 octaves, persistence, lacunarity, noiseScale);
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Export to PPM")) map->exportToPPM("map_export.ppm");
+        if (ImGui::Button("Invert Textures")) map->invertTextures();
+
+        ImGui::SliderInt("Brush Radius", &brushRadius, 1, 10);
+        ImGui::Text("Terrain Type:");
+        ImGui::RadioButton("Water", (int*)&currentTerrainType, 'W'); ImGui::SameLine();
+        ImGui::RadioButton("Grass", (int*)&currentTerrainType, 'G'); ImGui::SameLine();
+        ImGui::RadioButton("Stone", (int*)&currentTerrainType, 'S'); ImGui::SameLine();
+        ImGui::RadioButton("Beach", (int*)&currentTerrainType, 'B');
+        ImGui::End();
+
+        // Marker Controls Window
+        ImGui::Begin("Marker Controls");
+        ImGui::Checkbox("Placement Mode", &placementMode);
+        if (placementMode) {
+            removalMode = false;
+            ImGui::RadioButton("Cave", (int*)&currentMarkerType, CAVE);
+            ImGui::RadioButton("Village", (int*)&currentMarkerType, STOWN);
+            ImGui::RadioButton("Camp", (int*)&currentMarkerType, CAMP);
+        }
+        ImGui::Checkbox("Removal Mode", &removalMode);
+        if (removalMode) placementMode = false;
+        ImGui::End();
+
+        // Rendering
+        glClear(GL_COLOR_BUFFER_BIT);
+
+        // Draw terrain texture
+        glEnable(GL_TEXTURE_2D);
+        glBindTexture(GL_TEXTURE_2D, textureID);
+        glBegin(GL_QUADS);
+            // Corrected texture coordinates to match OpenGL's coordinate system
+            glTexCoord2f(0, 0); glVertex2f(-1, 1);   // Top-left
+            glTexCoord2f(1, 0); glVertex2f(1, 1);    // Top-right
+            glTexCoord2f(1, 1); glVertex2f(1, -1);   // Bottom-right
+            glTexCoord2f(0, 1); glVertex2f(-1, -1);  // Bottom-left
+        glEnd();
+        glDisable(GL_TEXTURE_2D);
+
+        // Draw markers on top of terrain
+        for (const auto& marker : mapMarkers) {
+            marker.render();
+        }
+
+        // Render ImGUI on top of everything
+        ImGui::Render();
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+        glfwSwapBuffers(window);
     }
 
+    // Cleanup
     delete map;
-    glfwDestroyWindow(window);
+    glDeleteTextures(1, &textureID);
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
     glfwTerminate();
     return 0;
 }
